@@ -1,5 +1,7 @@
 # 🧠 AI Agent: Context & Memory Management System
 
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://ai-agent-sejal-01.streamlit.app/)
+
 An AI Agent System exploring **Long-term Memory** and **Context Awareness** for AI Agents in business environments. This system acts as an intelligent auditor, making invoice approval decisions based on historical supplier performance.
 
 ## 🚀 Features
