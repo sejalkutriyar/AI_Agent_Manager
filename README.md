@@ -63,5 +63,3 @@ This app is ready for deployment on [Streamlit Community Cloud](https://streamli
 -   `requirements.txt`: Python dependencies.
 
 ---
-**Author**: Sejal Kumari  
-**Semester**: 4 (2026)
