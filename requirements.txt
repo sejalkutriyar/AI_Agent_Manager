@@ -1,0 +1,6 @@
+chromadb
+langchain
+langchain_openai
+pandas
+streamlit
+google-generativeai
