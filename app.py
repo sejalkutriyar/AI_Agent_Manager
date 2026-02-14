@@ -115,10 +115,27 @@ if process_btn:
                 3. **Redemption**: If 2024 was bad but 2025/2026 is good, consider it a redeemed supplier and lean towards APPROVE.
                 
                 Task: 
-                1. Provide a verdict: APPROVE, HOLD, or REJECT.
-                2. **Explain your reasoning contextually**. 
-                3. **CITE SPECIFIC DATES** and events from history that influenced your decision. output the verdict in the first line.
+                1.  **Line 1**: Verdict (Exact format: "VERDICT: APPROVE", "VERDICT: REJECT", or "VERDICT: HOLD")
+                2.  **Line 2**: Confidence Score (Exact format: "CONFIDENCE: X%")
+                3.  **Line 3**: Key Driver Event (Exact format: "KEY_DRIVER: YYYY-MM-DD: Event Description")
+                4.  **Line 4+**: Detailed Reasoning.
                 """
+                
+                # Feature 2: Semantic Memory Summarization (Information Overload Prevention)
+                if len(memories) > 5:
+                    with st.spinner("⚠️ Memory Overload detected. Generating Executive Summary..."):
+                        summary_prompt = f"Summarize these {len(memories)} supplier events into a concise 3-sentence executive brief focused on risks and reliability: {memory_summary}"
+                        try:
+                            # Use a lighter model for summarization
+                            summary_model = genai.GenerativeModel("gemini-2.0-flash-lite")
+                            summary_response = summary_model.generate_content(summary_prompt)
+                            if summary_response.text:
+                                # Replace raw list with summary in the main prompt
+                                prompt = prompt.replace(f"{memory_summary if memory_summary else 'No past issues recorded.'}", 
+                                                        f"Historical Executive Summary: {summary_response.text}")
+                                st.info(f"ℹ️ **Context Summary**: {summary_response.text}")
+                        except Exception:
+                            pass # Fallback to raw data
                 
                 # Fallback logic for generation
                 response_text = None
@@ -155,15 +172,68 @@ if process_btn:
                     st.success(f"Decision Generated using {active_model_name}!")
                     full_response = response_text
                     
-                    if "APPROVE" in full_response.upper():
-                        st.balloons()
-                        st.success("APPROVE")
-                    elif "REJECT" in full_response.upper():
-                        st.error("REJECT")
-                    else:
-                        st.warning("HOLD / INSPECT")
+                    # Parsing Logic
+                    lines = full_response.split('\n')
+                    verdict_line = lines[0].upper()
+                    confidence_line = "CONFIDENCE: 0%"
+                    key_driver_line = "KEY_DRIVER: N/A"
                     
-                    st.markdown(full_response)
+                    # Extract structured data
+                    for line in lines[:5]: 
+                        if "CONFIDENCE:" in line.upper():
+                            confidence_line = line
+                        if "KEY_DRIVER:" in line.upper():
+                            key_driver_line = line
+
+                    # Display Verdict Badge
+                    if "APPROVE" in verdict_line:
+                        st.balloons()
+                        st.success(verdict_line)
+                    elif "REJECT" in verdict_line:
+                        st.error(verdict_line)
+                    elif "HOLD" in verdict_line:
+                        st.warning(verdict_line)
+                    else:
+                        st.warning(verdict_line if "VERDICT" in verdict_line else "VERDICT: HOLD / INSPECT")
+
+                    # Feature 1: Confidence & Transparency Metrics
+                    m_col1, m_col2 = st.columns(2)
+                    
+                    # Parse Confidence Int
+                    try:
+                        conf_val = int(''.join(filter(str.isdigit, confidence_line)))
+                    except:
+                        conf_val = 50
+                        
+                    with m_col1:
+                        st.metric("AI Confidence", f"{conf_val}%")
+                        st.progress(conf_val / 100)
+                    
+                    with m_col2:
+                         st.info(f"🎯 **{key_driver_line}**")
+
+                    st.markdown("### 📝 AI Reasoning")
+                    st.write("\n".join(lines[3:])) # Print reasoning
+                    
+                    # Feature 3: Interactive Feedback Loop
+                    st.divider()
+                    st.subheader("📢 Process Feedback")
+                    
+                    feedback_col1, feedback_col2 = st.columns([3, 1])
+                    with feedback_col1:
+                        feedback_text = st.text_input("Disagree? Add correction:", placeholder="E.g., 'Override: Weather delay, not supplier fault.'")
+                    with feedback_col2:
+                        st.write("") 
+                        st.write("") 
+                        if st.button("💾 Save Feedback"):
+                            if feedback_text:
+                                mm = MemoryManager()
+                                from datetime import datetime
+                                today_str = datetime.now().strftime("%Y-%m-%d")
+                                mm.add_event(supplier, f"HUMAN_OVERRIDE: {feedback_text}", today_str)
+                                st.success("Feedback saved! Agent will remember this.")
+                            else:
+                                st.error("Enter feedback text.")
                 else:
                     st.error("All AI models failed. Please try again later (Quota Exceeded).")
                         
