@@ -1,5 +1,14 @@
 import streamlit as st
 import google.generativeai as genai
+
+# Fix for ChromaDB on Streamlit Cloud (SQLite version issue)
+import sys
+try:
+    __import__('pysqlite3')
+    sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+except ImportError:
+    pass
+
 from memory_engine import MemoryManager
 from database import init_db
 import sqlite3
@@ -59,6 +68,21 @@ with st.sidebar:
     supplier = st.selectbox("Select Supplier", ["Supplier XYZ", "TechCorp Inc", "Global Logistics"])
     amount = st.number_input("Invoice Amount (₹)", min_value=1000, value=250000)
     process_btn = st.button("Process with AI Memory")
+    
+    st.divider()
+    if st.button("🔄 Reset / Load Demo Data"):
+        mm = MemoryManager()
+        # Clear existing (optional, or just add)
+        # Add Demo Data for Supplier XYZ
+        mm.add_event("Supplier XYZ", "Delivered 30% broken items", "2024-07-15") # Stale
+        mm.add_event("Supplier XYZ", "Delayed shipment by 2 weeks", "2024-08-20") # Stale
+        mm.add_event("Supplier XYZ", "30% broken products delivered again", "2026-02-14") # Critical Fresh
+        
+        # Add Demo Data for TechCorp Inc
+        mm.add_event("TechCorp Inc", "Integration issue resolved in 48 hours", "2024-03-10")
+        mm.add_event("TechCorp Inc", "API usage increased 300%", "2026-01-20")
+        
+        st.success("Demo memories loaded! Try processing 'Supplier XYZ' now.")
 
 # Main Display Area
 col1, col2 = st.columns([1, 1])
