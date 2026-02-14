@@ -1,6 +1,6 @@
 # 🧠 AI Agent: Context & Memory Management System
 
-A Semester 4 (2026) Project exploring **Long-term Memory** and **Context Awareness** for AI Agents in business environments. This system acts as an intelligent auditor, making invoice approval decisions based on historical supplier performance.
+An AI Agent System exploring **Long-term Memory** and **Context Awareness** for AI Agents in business environments. This system acts as an intelligent auditor, making invoice approval decisions based on historical supplier performance.
 
 ## 🚀 Features
 
