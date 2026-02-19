@@ -1,5 +1,7 @@
 import streamlit as st
 import google.generativeai as genai
+import warnings
+from typing import List
 
 # Fix for ChromaDB on Streamlit Cloud (SQLite version issue)
 import sys
@@ -14,49 +16,62 @@ from database import init_db
 import sqlite3
 
 # SETUP & CONNECTION
-init_db()
-# GEMINI_API_KEY = "AIzaSyBJuQLzSQMLk5zXFrK3SA_fzsoeGQURXUQ"
-try:
-    GEMINI_API_KEY = st.secrets["GEMINI_API_KEY"]
-except FileNotFoundError:
-    st.error("Secrets file not found. Please create .streamlit/secrets.toml")
-    st.stop()
-except KeyError:
-    st.error("GEMINI_API_KEY not found in secrets.toml")
-    st.stop()
-
-# Robust Model Selection Logic
-def get_working_model():
-    # List of models to try in order of preference (lighter/cheaper first)
-    candidate_models = [
-        "gemini-2.0-flash-lite", 
-        "gemini-2.0-flash", 
-        "gemini-flash-latest",
-        "gemini-1.5-flash",
-        "gemini-pro"
-    ]
-    
-    for model_name in candidate_models:
-        try:
-            model = genai.GenerativeModel(model_name)
-            # Test connection with a dummy prompt
-            # Note: We won't actually call generate_content here to save quota, 
-            # but we initialize the object.
-            return model, model_name
-        except Exception:
-            continue
-            
-    return None, "None"
-
-try:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model, active_model_name = get_working_model()
-except Exception as e:
-    model = None
-    active_model_name = f"Error: {e}"
-
-# Page Config
 st.set_page_config(page_title="AI Agent Memory System", layout="wide")
+init_db()
+
+# SECURE API KEY HANDLING (Robust for sharing)
+api_key = None
+
+# 1. Try loading from secrets.toml first
+try:
+    api_key = st.secrets["GEMINI_API_KEY"]
+except (FileNotFoundError, KeyError):
+    pass
+
+# 2. If no secret found, ask in Sidebar (Good for sharing/demos)
+if not api_key:
+    with st.sidebar:
+        st.warning("⚠️ No Secrets Found")
+        api_key = st.text_input("Enter Gemini API Key manually:", type="password", help="Get a free key from Google AI Studio")
+
+# 3. Configure Gemini
+active_model_name = "AI Disabled (No Key)"
+model = None
+
+if api_key:
+    try:
+        genai.configure(api_key=api_key)
+        
+        # Robust Model Selection Logic
+        def get_working_model():
+            candidate_models = [
+                "gemini-2.5-flash",
+                "gemini-2.0-flash",
+                "gemini-2.0-flash-lite",
+                "gemini-2.5-pro"
+            ]
+            for model_name in candidate_models:
+                try:
+                    m = genai.GenerativeModel(model_name)
+                    # Lightweight check (doesn't consume quota)
+                    return m, model_name
+                except Exception:
+                    continue
+            return None, "None"
+
+        model, active_model_name = get_working_model()
+        
+        if model is None:
+             active_model_name = "Error: No valid models found"
+             
+    except Exception as e:
+        active_model_name = f"Error: {str(e)}"
+else:
+    active_model_name = "No API Key Provided"
+    model = None
+
+
+# Page Config moved to top
 
 # UI DESIGN
 st.title("🧠 AI Agent: Context & Memory Manager")
@@ -94,7 +109,18 @@ if process_btn:
         st.subheader("🤖 AI Auditor Verdict")
         
         if model is None:
-            st.error("AI Error: Could not connect to Gemini. Please check your internet or API key.")
+            # Provide a more actionable error message based on captured exception
+            try:
+                err_msg = genai_error
+            except NameError:
+                err_msg = "Unknown error while initializing Gemini client."
+
+            if "leaked" in err_msg.lower() or "403" in err_msg:
+                st.error("AI Error: Your API key was rejected (reported as leaked or invalid). Replace your GEMINI_API_KEY in .streamlit/secrets.toml or use a new key.")
+            elif "not found" in err_msg.lower() or "404" in err_msg:
+                st.error("AI Error: Requested model not found for this API version. Check model names or API version compatibility.")
+            else:
+                st.error(f"AI Error: Could not connect to Gemini. Details: {err_msg}")
         else:
             with st.spinner("AI is analyzing history..."):
                 memory_summary = "\n".join([f"- {m['date']}: [{m['status']}] {m['issue']}" for m in memories])
@@ -127,7 +153,7 @@ if process_btn:
                         summary_prompt = f"Summarize these {len(memories)} supplier events into a concise 3-sentence executive brief focused on risks and reliability: {memory_summary}"
                         try:
                             # Use a lighter model for summarization
-                            summary_model = genai.GenerativeModel("gemini-2.0-flash-lite")
+                            summary_model = genai.GenerativeModel("gemini-2.5-flash")
                             summary_response = summary_model.generate_content(summary_prompt)
                             if summary_response.text:
                                 # Replace raw list with summary in the main prompt
@@ -136,16 +162,16 @@ if process_btn:
                                 st.info(f"ℹ️ **Context Summary**: {summary_response.text}")
                         except Exception:
                             pass # Fallback to raw data
-                
+
                 # Fallback logic for generation
                 response_text = None
-                
+                model_errors: List[str] = []
                 # List of models to try if the primary one fails
                 fallback_chain = [
-                   active_model_name, # Try current one first
-                   "gemini-2.0-flash-lite",
-                   "gemini-flash-latest", 
-                   "gemini-pro"
+                    active_model_name, # Try current one first
+                    "gemini-2.5-flash",
+                    "gemini-2.0-flash-lite",
+                    "gemini-2.0-flash"
                 ]
                 
                 # Remove duplicates while preserving order
@@ -165,7 +191,9 @@ if process_btn:
                             break # Success!
                             
                     except Exception as e:
-                        print(f"Model {m_name} failed: {e}")
+                        err = str(e)
+                        print(f"Model {m_name} failed: {err}")
+                        model_errors.append(f"{m_name}: {err}")
                         continue
                 
                 if response_text:
@@ -235,7 +263,13 @@ if process_btn:
                             else:
                                 st.error("Enter feedback text.")
                 else:
-                    st.error("All AI models failed. Please try again later (Quota Exceeded).")
+                    # Show collected model error messages for debugging and actionable guidance
+                    if model_errors:
+                        st.error("All AI models failed. See below for details:")
+                        for me in model_errors:
+                            st.error(f"❌ {me}")
+                    else:
+                        st.error("All AI models failed. Please try again later (Quota Exceeded or Network Issue).")
                         
 
 

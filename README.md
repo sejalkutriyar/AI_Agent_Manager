@@ -65,3 +65,18 @@ This app is ready for deployment on [Streamlit Community Cloud](https://streamli
 -   `requirements.txt`: Python dependencies.
 
 ---
+
+## 🩺 Troubleshooting
+
+- **API key rejected / reported as leaked (403)**: If you see messages like "Your API key was reported as leaked", revoke the current key in Google Cloud / AI Studio and create a new key. Then update `.streamlit/secrets.toml` with the new `GEMINI_API_KEY` value.
+
+- **Model not found (404)**: A 404 during generation often means the model name is not supported for your API version. Check model names, or remove models that are not available for your account.
+
+- **Switching from `google.generativeai` to `google.genai`**: The older `google.generativeai` package is deprecated. To prepare for newer SDKs, update your environment and code when ready:
+
+```bash
+pip install --upgrade google-genai
+# or add to requirements.txt: google-genai>=0.1.0
+```
+
+Refer to the Google GenAI SDK docs for migration details. If you are not ready to migrate immediately, the app includes improved error messaging to help identify API key and model issues.

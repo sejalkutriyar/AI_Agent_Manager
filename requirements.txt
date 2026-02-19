@@ -5,4 +5,5 @@ pandas
 streamlit>=1.36.0
 altair<5
 google-generativeai
-pysqlite3-binary
+# Removed `pysqlite3-binary` because prebuilt wheels are unavailable on Windows/PyPI.
+# The app falls back to the standard library `sqlite3` if `pysqlite3` isn't present.
